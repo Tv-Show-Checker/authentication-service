@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  authentication-service-db:
+    image: postgres:13
+    container_name: tv-show-checker-authentication-service-db
+    hostname: authentication-service-db
+    ports:
+      - "5402:5432"
+    environment:
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASSWORD
+      POSTGRES_DB: $DB_NAME
+    restart: always
+    volumes:
+      - authentication-service-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${DB_USER} -d ${DB_NAME}'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  authentication-service-cache:
+    image: redis:7.2.4
+    container_name: tv-show-checker-cache
+    hostname: tv-show-checker-cache
+    restart: always
+    command: /bin/sh -c "redis-server --requirepass ${REDIS_PASSWORD}"
+    ports:
+      - "6379:6379"
+
+  authentication-service-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tv-show-checker-authentication-service-app
+    image: tv-show-checker-authentication-service-app:latest
+    depends_on:
+      authentication-service-db:
+        condition: service_healthy
+      authentication-service-cache:
+        condition: service_started
+    command: python manage.py runserver 0.0.0.0:8000
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    networks:
+      - default
+
+volumes:
+  authentication-service-db:
+
+networks:
+  default:
+    name: tv-show-checker-authentication-service-net
+#  external:
+#    name: django-advanced-net
+#    external: true
